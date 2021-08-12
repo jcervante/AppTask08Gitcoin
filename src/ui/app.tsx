@@ -11,6 +11,9 @@ import { AddressTranslator } from 'nervos-godwoken-integration';
 
 import { DonationWrapper } from '../lib/contracts/DonationWrapper';
 import { CONFIG } from '../config';
+import {SudtERC20Wrapper} from "../lib/contracts/ERC20Wrapper";
+
+
 
 async function createWeb3() {
     // Modern dapp browsers...
@@ -42,6 +45,7 @@ async function createWeb3() {
 export function App() {
     const [web3, setWeb3] = useState<Web3>(null);
     const [contract, setContract] = useState<DonationWrapper>();
+    const [ckETHContract,setckETHContract]=useState<SudtERC20Wrapper>();
     const [accounts, setAccounts] = useState<string[]>();
     const [l2Balance, setL2Balance] = useState<bigint>();
     const [existingContractIdInputValue, setExistingContractIdInputValue] = useState<string>();
@@ -49,18 +53,24 @@ export function App() {
     const [balanceValue, setbalanceValue] = useState<number | undefined>();
     const [deployTxHash, setDeployTxHash] = useState<string | undefined>();
     const [polyjuiceAddress, setPolyjuiceAddress] = useState<string | undefined>();
+    const [polyjuiceBalance, setPolyjuiceBalance] = useState<string>();
+    const [depositAddress, setDepositAddress] = useState<string | undefined>();
     const [transactionInProgress, setTransactionInProgress] = useState(false);
     const toastId = React.useRef(null);
     const [newStoredNumberInputValue, setNewStoredNumberInputValue] = useState<
         number | undefined
     >();
 
-    useEffect(() => {
+    
+     useEffect( () => {
         if (accounts?.[0]) {
             const addressTranslator = new AddressTranslator();
             setPolyjuiceAddress(addressTranslator.ethAddressToGodwokenShortAddress(accounts?.[0]));
+            
+       
         } else {
             setPolyjuiceAddress(undefined);
+         
         }
     }, [accounts?.[0]]);
 
@@ -98,10 +108,12 @@ export function App() {
 
             setDeployTxHash(transactionHash);
             setExistingContractAddress(_contract.address);
+            
             toast(
                 'Successfully deployed a smart-contract. You can now proceed to get or set the value in a smart contract.',
                 { type: 'success' }
             );
+
         } catch (error) {
             console.error(error);
             toast.error(
@@ -115,15 +127,46 @@ export function App() {
     async function getBalance() {
         const value = await contract.getBalance(account);
         setbalanceValue(value);
+   
     }
+
+    
+
+
+
+
+
 
     async function setExistingContractAddress(contractAddress: string) {
         const _contract = new DonationWrapper(web3);
-        _contract.useDeployed(contractAddress.trim());
+        const _ckETHContract=new SudtERC20Wrapper(web3);
+        const addressTranslator=new AddressTranslator();
 
-        setContract(_contract);
+         _contract.useDeployed(contractAddress.trim());
+
+        
+        _ckETHContract.useDeployed("0x57E5b107Acf6E78eD7e4d4b83FF76C041d3307b7");
+        
+        const depositAddress = await addressTranslator.getLayer2DepositAddress(web3, account);
+        const _ckEthBalance = await _ckETHContract.balanceOf(polyjuiceAddress, account);
+        
+        setContract(_contract);  
+        setckETHContract(_ckETHContract);
         setStoredValue(undefined);
-        setbalanceValue(undefined);
+        setDepositAddress(depositAddress.addressString);
+       
+        const updateBalances=async()=>
+        {
+            const _ckEthBalance = await _ckETHContract.balanceOf(polyjuiceAddress, account);
+            setPolyjuiceBalance(formatNumber( _ckEthBalance.toString(),18));
+        
+            const _l2Balance = BigInt(await web3.eth.getBalance(account));
+            setL2Balance(_l2Balance);
+            setTimeout(updateBalances,10000);
+        }
+        updateBalances();
+        
+        
     }
 
     async function makeDonation() {
@@ -166,6 +209,23 @@ export function App() {
     }
 
 
+    function formatNumber(number:string,ndecimals:number){
+        if(number.length>ndecimals)
+        {
+           return number.substring(0,number.length-ndecimals)+"."+number.substring(number.length-ndecimals).replace(/0+/,"");
+         }else
+           {
+             
+             let nzeros=ndecimals-number.length;
+             let newnumber="0."+String("0").repeat(nzeros)+number.replace(/0+/,"");;
+             return newnumber;
+           }
+        
+      }
+      
+
+
+
 
     useEffect(() => {
         if (web3) {
@@ -197,15 +257,24 @@ export function App() {
             Your Polyjuice address: <b>{polyjuiceAddress || ' - '}</b>
             <br />
             <br />
+            Your Polyjuice cKETH balance: <b>{polyjuiceBalance || ' - '}</b>
+            <br />
+            <br />
+            Layer 2 Deposit Address on Layer 1:<br/> <div  className="l2dAddress"><b>{depositAddress || ' - '}</b></div>
+            <br />
+            <br />
             Nervos Layer 2 balance:{' '}
-            <b>{l2Balance ? (l2Balance / 10n ** 8n).toString() : <LoadingIndicator />} CKB</b>
+            <b>{l2Balance ? formatNumber(l2Balance.toString(),8) : <LoadingIndicator />} CKB</b>
             <br />
             <br />
             Deployed contract address: <b>{contract?.address || '-'}</b> <br />
             Deploy transaction hash: <b>{deployTxHash || '-'}</b>
             <br />
             <hr />
+
            
+
+
             <button onClick={deployContract} disabled={!l2Balance}>
                 Deploy contract
             </button>
@@ -233,11 +302,10 @@ export function App() {
             <button onClick={makeDonation} disabled={!contract} className="appbtn">
                 Make a Donation
             </button>
-
             <button onClick={withdrawBalance} disabled={!contract} className="appbtn">
-                Withdraw Balance 
+                Withdraw Balance
             </button>
-
+            <a target="_blank" href="https://force-bridge-test.ckbapp.dev/bridge/Ethereum/Nervos?xchain-asset=0x0000000000000000000000000000000000000000">Deposit from Force-Bridge</a>    
             <br />
             <br />
             <br />

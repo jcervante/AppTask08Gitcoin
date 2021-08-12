@@ -30,7 +30,15 @@ body {
     border-radius: 20%;
     font-weight: bold;
 }
+.l2dAddress
+{
+    width:60%;
+    color:green;
+    word-wrap:break-word;
+    display: inline;
+    
 
+}
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button{
     -webkit-appearance: none;
